@@ -10,6 +10,7 @@ z3-solver = "*"
 pydantic = "^1"
 typer = "*"
 python-dateutil = "^2.8.2"
+pytest-bdd = "^6.0.1"
 
 [tool.poetry.dev-dependencies]
 ipython = "*"
