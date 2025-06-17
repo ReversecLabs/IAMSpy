@@ -89,7 +89,10 @@ def _date(data):
 
 
 def _numeric(data):
-    return z3.IntVal(data)
+    if "." in str(data):
+        return z3.RealVal(data)
+    else:
+        return z3.IntVal(data)
 
 
 def _string(data):
