@@ -368,6 +368,14 @@ def test_can_i(files, inp, out):
             ),
             set(["arn:aws:iam::111111111111:role/testing", "arn:aws:iam::111111111111:role/testing2"]),
         ),
+        (
+            {"gaads": ["gaad-uppercase.json"], "resources": ["resource-uppercase.json"]},
+            (
+                "s3:GetObject",
+                "arn:aws:s3:::bucket/key",
+            ),
+            set(["arn:aws:iam::111111111111:user/userA", "arn:aws:iam::111111111111:user/userB"]),
+        ),
     ],
 )
 def test_who_can(files, inp, out):
