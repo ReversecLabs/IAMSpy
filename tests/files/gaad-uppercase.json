@@ -1,0 +1,52 @@
+{
+    "RoleDetailList": [],
+    "GroupDetailList": [],
+    "UserDetailList": [
+        {
+            "Path": "/",
+            "UserName": "userA",
+            "UserId": "AIDAVRUVVWHX5JXO27GWS",
+            "Arn": "arn:aws:iam::111111111111:user/userA",
+            "CreateDate": "2025-09-02T09:40:39+00:00",
+            "GroupList": [],
+            "UserPolicyList": [
+                {
+                    "PolicyName": "AllowGetObject",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Sid": "AllowGetObject",
+                                "Effect": "Allow",
+                                "Action": "s3:GetObject",
+                                "Resource": "arn:aws:s3:::bucket/*"
+                            }
+                        ]
+                    }
+                }
+            ],
+            "AttachedManagedPolicies": []
+        },
+        {
+            "Path": "/",
+            "UserName": "userB",
+            "UserId": "AIDAVRUVVWHX4K7W3CHXO",
+            "Arn": "arn:aws:iam::111111111111:user/userB",
+            "CreateDate": "2025-09-01T14:28:12+00:00",
+            "GroupList": [],
+            "UserPolicyList": [],
+            "AttachedManagedPolicies": []
+        },
+        {
+            "Path": "/",
+            "UserName": "userC",
+            "UserId": "AIDAVRUVVWHXWLBII3IIU",
+            "Arn": "arn:aws:iam::111111111111:user/userC",
+            "CreateDate": "2025-09-02T10:03:39+00:00",
+            "GroupList": [],
+            "UserPolicyList": [],
+            "AttachedManagedPolicies": []
+        }
+    ],
+    "Policies": []
+}

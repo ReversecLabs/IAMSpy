@@ -169,6 +169,15 @@ class Model:
 
         return output
 
+    def get_correct_case_principal(self, principal: str) -> str:
+        identities = [x.lstrip("identity_") for x in self.model_vars if x.startswith("identity_arn")]
+
+        for identity in identities:
+            if identity.lower() == principal.lower():
+                return identity
+
+        raise Exception("Identity not found to match principal")
+
     def can_i(
         self,
         source: str,
@@ -243,7 +252,7 @@ class Model:
                 sources.append(str(source)[1:-1])
                 solver.add(s != source)
                 sat = solver.check() == z3.sat
-                yield str(source)[1:-1]
+                yield self.get_correct_case_principal(str(source)[1:-1])
 
     def who_can_batch_resource(
         self,
