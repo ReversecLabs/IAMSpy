@@ -97,6 +97,15 @@ import pytest
             True,
         ),
         (
+            {"gaads": ["basic-allow.json"], "resources": ["cross-account-rp.json"]},
+            (
+                "arn:aws:iam::123456789012:role/name2",
+                "lambda:InvokeFunction",
+                "arn:aws:lambda:eu-west-1:111111111111:function:helloworld",
+            ),
+            False,
+        ),
+        (
             {"gaads": ["allow-with-conditions.json"]},
             (
                 "arn:aws:iam::123456789012:role/name",

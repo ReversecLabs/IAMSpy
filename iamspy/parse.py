@@ -519,7 +519,7 @@ def generate_evaluation_logic_checks(model_vars, source: Optional[str], resource
     )
     constraints.append(
         z3.Or(
-            z3.And(z3.String("s_account") != z3.String("r_account"), resource_check),
+            z3.And(z3.String("s_account") != z3.String("r_account"), identity_check, resource_check),
             z3.String("s_account") == z3.String("r_account"),
         )
     )
