@@ -1,0 +1,20 @@
+[
+    {
+        "Resource": "arn:aws:s3:::bucket",
+        "Policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "AllowGetObject",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": "arn:aws:iam::111111111111:user/userB"
+                    },
+                    "Action": "s3:GetObject",
+                    "Resource": "arn:aws:s3:::bucket/*"
+                }
+            ]
+        },
+        "Account": "111111111111"
+    }
+]
