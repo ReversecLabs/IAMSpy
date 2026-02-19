@@ -1,32 +1,46 @@
-[tool.poetry]
+[project]
 name = "iamspy"
 version = "0.1.0"
 description = ""
-authors = ["Mohit Gupta <mohit.gupta@withsecure.com>"]
+authors = [{ name = "Mohit Gupta", email = "mohit.gupta@reversec.com" }]
+requires-python = ">=3.9,<4"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "z3-solver",
+    "pydantic>=1,<2",
+    "typer",
+    "python-dateutil>=2.8.2,<3",
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-z3-solver = "*"
-pydantic = "^1"
-typer = "*"
-python-dateutil = "^2.8.2"
+[project.scripts]
+iamspy = "iamspy.cli:app"
 
-[tool.poetry.dev-dependencies]
-ipython = "*"
-black = "^22.3.0"
-pytest = "^7.1.1"
-pytest-cov = "^3.0.0"
-pdbpp = "^0.10.3"
+[dependency-groups]
+dev = [
+    "ipython",
+    "black",
+    "pytest",
+    "pytest-cov",
+    "pdbpp",
+    "setuptools",
+]
 
-[tool.poetry.scripts]
-iamspy = 'iamspy.cli:app'
+[tool.uv]
 
-[tool.poetry.group.dev.dependencies]
-setuptools = "^70.0.0"
+[tool.uv.build-backend]
+module-root = ""
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.10.4,<0.11.0"]
+build-backend = "uv_build"
 
 [tool.black]
 line-length = 120
