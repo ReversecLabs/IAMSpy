@@ -250,9 +250,49 @@ class Model:
                 source = m[s]
                 logger.debug(f"Found {source} as a potential candidate")
                 sources.append(str(source)[1:-1])
+                yield self.get_correct_case_principal(str(source)[1:-1])
                 solver.add(s != source)
                 sat = solver.check() == z3.sat
-                yield self.get_correct_case_principal(str(source)[1:-1])
+
+    def which_can_i(
+        self,
+        source_arn: str,
+        action: str,
+        resources: List[str],
+        conditions: List[str] = [],
+        condition_file: Optional[str] = None,
+        strict_conditions: bool = False,
+    ) -> List[str]:
+        """
+        Used by the CLI to provide the which-can-i call.
+        """
+        with self as solver:
+            logger.debug("Identifying model conditions")
+            model_conditions = get_conditions(self.model_vars)
+            logger.debug(f"Model conditions identified as: {model_conditions}")
+
+            query_conditions = self._generate_query_conditions(
+                source=source_arn,
+                action=action,
+                resource=resources,
+                conditions=conditions,
+                condition_file=condition_file,
+                strict_conditions=strict_conditions,
+                model_conditions=model_conditions,
+            )
+
+            logger.debug("Adding generated query conditions")
+            # solver.set(threads=4)
+            solver.add(*query_conditions)
+            sat = solver.check() == z3.sat
+            while sat:
+                r = z3.String("r")
+                m = solver.model()
+                resource = m[r]
+                logger.debug(f"Found {resource} as a potential candidate")
+                yield str(resource)[1:-1]
+                solver.add(r != resource)
+                sat = solver.check() == z3.sat
 
     def who_can_batch_resource(
         self,
