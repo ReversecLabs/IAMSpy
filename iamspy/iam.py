@@ -2,11 +2,26 @@
 Classes representing IAM documents
 """
 from __future__ import annotations
+from dataclasses import asdict
 from pydantic import Field, validator
 from pydantic.dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List, Dict, Union, Any
 from enum import Enum
+import logging
+
+
+logger = logging.getLogger("iamspy.iam")
+
+
+def json_serial(obj):
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    elif isinstance(obj, Effects):
+        return obj.value
+    else:
+        raise TypeError("Unserializable object {} of type {}".format(obj, type(obj)))
+    return obj
 
 
 class Effects(Enum):
@@ -188,6 +203,17 @@ class AuthorizationDetails:
     RoleDetailList: List[RoleDetail]
     Policies: List[PolicyDetail]
 
+    @property
+    def account(self) -> str:
+        for entity in self.UserDetailList + self.GroupDetailList + self.RoleDetailList + self.Policies:
+            if entity.Arn and (account := entity.Arn.split(":")[4]):
+                return account
+
+    def get_entity(self, arn: str) -> Union[UserDetail, GroupDetail, RoleDetail, PolicyDetail]:
+        for entity in self.UserDetailList + self.GroupDetailList + self.RoleDetailList + self.Policies:
+            if entity.Arn == arn:
+                return entity
+
 
 @dataclass
 class ResourcePolicy:
@@ -206,6 +232,12 @@ class SCPPolicy:
     AwsManaged: bool
     Content: Document
 
+    def __eq__(self, other):
+        return self.Arn == other.Arn
+
+    def __hash__(self):
+        return hash(self.Arn)
+
 
 @dataclass
 class OrganizationAccount:
@@ -218,6 +250,7 @@ class OrganizationAccount:
     JoinedTimestamp: datetime
     Policies: List[SCPPolicy]
     Type: str = Field(..., regex="^Account$")
+    Parent: Optional[Union[RootOrganization, OrganizationUnit]] = Field(None)
 
     @property
     def all_policies(self) -> List[SCPPolicy]:
@@ -226,6 +259,12 @@ class OrganizationAccount:
     @property
     def all_children(self) -> List[OrganizationAccount]:
         return [self]
+
+    def __eq__(self, other):
+        return self.Arn == other.Arn
+
+    def __hash__(self):
+        return hash(self.Arn)
 
 
 @dataclass
@@ -236,6 +275,7 @@ class OrganizationUnit:
     Policies: List[SCPPolicy]
     Children: List[Union[OrganizationUnit, OrganizationAccount]]
     Type: str = Field(..., regex="^OU$")
+    Parent: Optional[Union[RootOrganization, OrganizationUnit]] = Field(None)
 
     @property
     def all_policies(self) -> List[SCPPolicy]:
@@ -255,6 +295,26 @@ class OrganizationUnit:
 
         return children
 
+    def set_parents(self):
+        for child in self.Children:
+            child.Parent = self
+            if isinstance(child, OrganizationUnit):
+                child.set_parents()
+
+    def find_account(self, account_id: str) -> Optional[OrganizationAccount]:
+        for child in self.Children:
+            if isinstance(child, OrganizationAccount) and child.Id == account_id:
+                return child
+            elif isinstance(child, OrganizationUnit):
+                if result := child.find_account(account_id):
+                    return result
+
+    def __eq__(self, other):
+        return self.Arn == other.Arn
+
+    def __hash__(self):
+        return hash(self.Arn)
+
 
 @dataclass
 class RootOrganization:
@@ -265,6 +325,7 @@ class RootOrganization:
     Policies: List[SCPPolicy]
     Children: List[Union[OrganizationUnit, OrganizationAccount]]
     Type: str = "Root"
+    Parent: None = None
 
     @property
     def all_policies(self) -> List[SCPPolicy]:
@@ -283,6 +344,47 @@ class RootOrganization:
             children += child.all_children
 
         return children
+
+    def set_parents(self):
+        for child in self.Children:
+            child.Parent = self
+            if isinstance(child, OrganizationUnit):
+                child.set_parents()
+
+    def find_account(self, account_id: str) -> Optional[OrganizationAccount]:
+        for child in self.Children:
+            if isinstance(child, OrganizationAccount) and child.Id == account_id:
+                return child
+            elif isinstance(child, OrganizationUnit):
+                if result := child.find_account(account_id):
+                    return result
+
+    def __eq__(self, other):
+        return self.Arn == other.Arn
+
+    def __hash__(self):
+        return hash(self.Arn)
+
+
+@dataclass
+class DataModel:
+    gaads: Dict[str, AuthorizationDetails] = Field(default_factory=dict)
+    resource_policies: List[ResourcePolicy] = Field(default_factory=list)
+    orgs: List[RootOrganization] = Field(default_factory=list)
+
+    def get_identity_policies(self, source_arn: str) -> List[Document]:
+        account_id = source_arn.split(":")[4]
+        try:
+            gaad = self.gaads[account_id]
+        except KeyError:
+            logger.warning(f"Can't find GAAD for account {account_id}")
+            return []
+        return extract_applicable_policies(gaad, source_arn)
+
+    def get_aws_account(self, account_id: str) -> Optional[OrganizationAccount]:
+        for org in self.orgs:
+            if account := org.find_account(account_id):
+                return account
 
 
 def extract_applicable_policies(data: AuthorizationDetails, source_arn: str) -> List[Document]:
