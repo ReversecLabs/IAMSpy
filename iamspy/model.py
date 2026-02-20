@@ -397,6 +397,50 @@ class Model:
 
         return entity.Arn
 
+    def _check_viable_source_accounts(self, action: str, resource: str) -> Set[str]:
+        print("Checking now")
+        all_source_accounts = list(self._model.gaads.keys())
+        try:
+            if resource.startswith("arn:aws:s3:::") and "/" in resource:
+                bucket = resource.split("/")[0]
+                rp = [p for p in self._model.resource_policies if p.Resource == bucket]
+            else:
+                rp = [p for p in self._model.resource_policies if p.Resource == resource]
+        except StopIteration:
+            # No resource policy, assume same account only (unless it's an S3 bucket)
+            if resource.startswith("arn:aws:s3:::"):
+                return set(all_source_accounts)
+            else:
+                return set([resource.split(":")[4]])
+
+        solver = self.generate_solver(
+            source=None,
+            action=action,
+            resource=resource,
+        )
+        solver.add(z3.Bool("identity") == True)
+        solver.add(
+            z3.Or(
+                *[
+                    z3.And(
+                        parse_string(z3.String("s"), f"arn:aws:iam::{account}:*"),
+                        z3.String(f"s_account") == z3.StringVal(account),
+                    )
+                    for account in all_source_accounts
+                ]
+            )
+        )
+
+        accounts = set()
+        while solver.check() == z3.sat:
+            m = solver.model()
+            account = str(m[z3.String("s_account")])[1:-1]
+            accounts.add(account)
+            solver.add(z3.String("s_account") != z3.StringVal(account))
+
+        logger.debug(f"Viable source accounts for {resource} are: {accounts}")
+        return accounts
+
     def _can_i(
         self,
         source: str,
@@ -514,8 +558,13 @@ class Model:
         """
         Used by the CLI to provide the who-can call.
         """
+        possible_accounts = self._check_viable_source_accounts(action, resource)
+
         for gaad in self._model.gaads.values():
-            print(f"Checking identities in {gaad.account} GAAD")
+            if gaad.account not in possible_accounts:
+                logger.debug(f"Skipping {gaad.account} GAAD as not a viable source account for {resource}")
+                continue
+            logger.debug(f"Checking identities in {gaad.account} GAAD")
             sources = set()
             for identity in gaad.RoleDetailList + gaad.UserDetailList:
                 sources.add(identity.Arn)
