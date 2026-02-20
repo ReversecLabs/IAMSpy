@@ -277,7 +277,6 @@ class Model:
         return entity.Arn
 
     def _check_viable_source_accounts(self, action: str, resource: str) -> Set[str]:
-        print("Checking now")
         all_source_accounts = list(self._model.gaads.keys())
         try:
             if resource.startswith("arn:aws:s3:::") and "/" in resource:
@@ -292,32 +291,20 @@ class Model:
             else:
                 return set([resource.split(":")[4]])
 
-        solver = self.generate_solver(
-            source=None,
-            action=action,
-            resource=resource,
-        )
-        solver.add(z3.Bool("identity") == True)
-        solver.add(
-            z3.Or(
-                *[
-                    z3.And(
-                        parse_string(z3.String("s"), f"arn:aws:iam::{account}:*"),
-                        z3.String(f"s_account") == z3.StringVal(account),
-                    )
-                    for account in all_source_accounts
-                ]
-            )
-        )
-
         accounts = set()
-        while solver.check() == z3.sat:
-            m = solver.model()
-            account = str(m[z3.String("s_account")])[1:-1]
-            accounts.add(account)
-            solver.add(z3.String("s_account") != z3.StringVal(account))
+        for account in all_source_accounts:
+            solver = self.generate_solver(
+                source=None,
+                action=action,
+                resource=resource,
+            )
+            solver.add(z3.Bool("identity") == True)
+            solver.add(z3.String("s_account") == z3.StringVal(account))
+            solver.add(parse_string(z3.String("s"), f"arn:aws:iam::{account}:*"))
+            if solver.check() == z3.sat:
+                logger.debug(f"Found {account} as a viable source account for {resource}")
+                accounts.add(account)
 
-        logger.debug(f"Viable source accounts for {resource} are: {accounts}")
         return accounts
 
     def can_i(
