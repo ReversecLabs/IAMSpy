@@ -369,24 +369,17 @@ class Model:
             for identity in gaad.RoleDetailList + gaad.UserDetailList:
                 sources.add(identity.Arn)
 
-            solver = self.generate_solver(
-                source=list(sources),
-                action=action,
-                resource=resource,
-                conditions=conditions,
-                condition_file=condition_file,
-                strict_conditions=strict_conditions,
-            )
-
-            sat = solver.check() == z3.sat
-            while sat:
-                s = z3.String("s")
-                m = solver.model()
-                source = m[s]
-                logger.debug(f"Found {source} as a potential candidate")
-                yield self.get_correct_case_principal(str(source)[1:-1])
-                solver.add(s != source)
-                sat = solver.check() == z3.sat
+            for source in sources:
+                if self.can_i(
+                    source=source,
+                    action=action,
+                    resource=resource,
+                    conditions=conditions,
+                    condition_file=condition_file,
+                    strict_conditions=strict_conditions,
+                ):
+                    logger.debug(f"Found {source} as a potential candidate")
+                    yield source
 
     def which_can_i(
         self,
