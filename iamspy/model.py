@@ -2,6 +2,7 @@ from typing import List, Optional, Set, Union, Tuple
 import logging
 import json
 import z3
+import itertools
 from dataclasses import asdict
 from pathlib import Path
 from iamspy.iam import AuthorizationDetails, ResourcePolicy, RootOrganization, DataModel, json_serial
@@ -393,33 +394,17 @@ class Model:
         """
         Used by the CLI to provide the which-can-i call.
         """
-        with self as solver:
-            logger.debug("Identifying model conditions")
-            model_conditions = get_conditions(self.model_vars)
-            logger.debug(f"Model conditions identified as: {model_conditions}")
-
-            query_conditions = self._generate_query_conditions(
+        for resource in resources:
+            if self.can_i(
                 source=source_arn,
                 action=action,
-                resource=resources,
+                resource=resource,
                 conditions=conditions,
                 condition_file=condition_file,
                 strict_conditions=strict_conditions,
-                model_conditions=model_conditions,
-            )
-
-            logger.debug("Adding generated query conditions")
-            # solver.set(threads=4)
-            solver.add(*query_conditions)
-            sat = solver.check() == z3.sat
-            while sat:
-                r = z3.String("r")
-                m = solver.model()
-                resource = m[r]
+            ):
                 logger.debug(f"Found {resource} as a potential candidate")
-                yield str(resource)[1:-1]
-                solver.add(r != resource)
-                sat = solver.check() == z3.sat
+                yield resource
 
     def who_can_batch_resource(
         self,
@@ -444,26 +429,17 @@ class Model:
             for identity in gaad.RoleDetailList + gaad.UserDetailList:
                 sources.add(identity.Arn)
 
-            solver = self.generate_solver(
-                source=list(sources),
-                action=action,
-                resource=resources,
-                conditions=conditions,
-                condition_file=condition_file,
-                strict_conditions=strict_conditions,
-            )
-
-            sat = solver.check() == z3.sat
-            while sat:
-                s = z3.String("s")
-                r = z3.String("r")
-                m = solver.model()
-                source = str(m[s])[1:-1]
-                resource = str(m[r])[1:-1]
-                logger.debug(f"Found {source} as a potential candidate for {resource}")
-                yield self.get_correct_case_principal(source), resource
-                solver.add(z3.Not(z3.And(s == z3.StringVal(source), r == z3.StringVal(resource))))
-                sat = solver.check() == z3.sat
+            for source, resource in itertools.product(sources, resources):
+                if self.can_i(
+                    source=source,
+                    action=action,
+                    resource=resource,
+                    conditions=conditions,
+                    condition_file=condition_file,
+                    strict_conditions=strict_conditions,
+                ):
+                    logger.debug(f"Found {source} as a potential candidate for {resource}")
+                    yield source, resource
 
     def supports_external(self) -> List[str]:
         with self as solver:
