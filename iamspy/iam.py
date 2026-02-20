@@ -21,7 +21,6 @@ def json_serial(obj):
         return obj.value
     else:
         raise TypeError("Unserializable object {} of type {}".format(obj, type(obj)))
-    return obj
 
 
 class Effects(Enum):
@@ -372,72 +371,7 @@ class DataModel:
     resource_policies: List[ResourcePolicy] = Field(default_factory=list)
     orgs: List[RootOrganization] = Field(default_factory=list)
 
-    def get_identity_policies(self, source_arn: str) -> List[Document]:
-        account_id = source_arn.split(":")[4]
-        try:
-            gaad = self.gaads[account_id]
-        except KeyError:
-            logger.warning(f"Can't find GAAD for account {account_id}")
-            return []
-        return extract_applicable_policies(gaad, source_arn)
-
     def get_aws_account(self, account_id: str) -> Optional[OrganizationAccount]:
         for org in self.orgs:
             if account := org.find_account(account_id):
                 return account
-
-
-def extract_applicable_policies(data: AuthorizationDetails, source_arn: str) -> List[Document]:
-    """
-    For any given ARN, go through the GAAD, find all policies that apply to an ARN
-    """
-    source_type = source_arn.split(":")[5].split("/")[0]
-
-    source: Union[RoleDetail, UserDetail]
-
-    if source_type == "user":
-        try:
-            source = next(x for x in data.UserDetailList if x.Arn == source_arn)
-            inline_policies = source.UserPolicyList
-        except StopIteration:
-            raise ValueError("Can't find Source ARN")
-    elif source_type == "role":
-        try:
-            source = next(x for x in data.RoleDetailList if x.Arn == source_arn)
-            inline_policies = source.RolePolicyList
-        except StopIteration:
-            raise ValueError("Can't find Source ARN")
-    applicable_policies = []
-
-    for managed_policy in source.AttachedManagedPolicies:
-        policy_arn = managed_policy.PolicyArn
-        try:
-            policy_details = next(x for x in data.Policies if policy_arn == x.Arn)
-            policy_version = next(x for x in policy_details.PolicyVersionList if x.IsDefaultVersion)
-        except StopIteration:
-            continue
-        applicable_policies.append(policy_version.Document)
-
-    for inline_policy in inline_policies:
-        applicable_policies.append(inline_policy.PolicyDocument)
-
-    if isinstance(source, UserDetail):
-        for name in source.GroupList:
-            try:
-                group = next(x for x in data.GroupDetailList if x.GroupName == name)
-            except StopIteration:
-                continue
-
-            for managed_policy in group.AttachedManagedPolicies:
-                policy_arn = managed_policy.PolicyArn
-                try:
-                    policy_details = next(x for x in data.Policies if policy_arn == x.Arn)
-                    policy_version = next(x for x in policy_details.PolicyVersionList if x.IsDefaultVersion)
-                except StopIteration:
-                    continue
-                applicable_policies.append(policy_version.Document)
-
-            for policy in group.GroupPolicyList:
-                applicable_policies.append(policy.PolicyDocument)
-
-    return applicable_policies

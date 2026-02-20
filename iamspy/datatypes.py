@@ -1,5 +1,4 @@
 import logging
-import base64
 import ipaddress
 import string
 import z3

@@ -31,6 +31,7 @@ dev = [
     "pytest-cov",
     "pdbpp",
     "setuptools",
+    "vulture>=2.14",
 ]
 
 [tool.uv]
