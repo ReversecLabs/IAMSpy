@@ -3,7 +3,7 @@ Classes representing IAM documents
 """
 from __future__ import annotations
 from dataclasses import asdict
-from pydantic import Field, validator
+from pydantic import Field, field_validator, model_validator
 from pydantic.dataclasses import dataclass
 from datetime import datetime, date
 from typing import Optional, List, Dict, Union, Any
@@ -40,7 +40,7 @@ class Statements:
     NotResource: Optional[Union[str, List[str]]] = None
     Condition: Optional[Dict[str, Dict[str, Union[str, List[str]]]]] = None
 
-    @validator("Principal", pre=True)
+    @field_validator("Principal", mode="before")
     def principal_is_list(cls, v):
         if not v:
             return v
@@ -51,7 +51,7 @@ class Statements:
                 v[key] = [value]
         return v
 
-    @validator("NotPrincipal", pre=True)
+    @field_validator("NotPrincipal", mode="before")
     def notprincipal_is_list(cls, v):
         if not v:
             return v
@@ -62,11 +62,11 @@ class Statements:
                 v[key] = [value]
         return v
 
-    @validator("NotAction", always=True)
-    def at_least_action_or_not_action(cls, v, values, **kwargs):
-        if not ((values.get("Action", None) is not None) ^ (v is not None)):
+    @model_validator(mode="after")
+    def at_least_action_or_not_action(self) -> Self:
+        if not self.Action and not self.NotAction:
             raise ValueError("At least one of Action and NotAction must be specified")
-        return v
+        return self
 
 
 @dataclass
@@ -75,7 +75,7 @@ class Document:
     Id: Optional[str] = None
     Statement: List[Statements] = Field(default_factory=list)
 
-    @validator("Statement", pre=True)
+    @field_validator("Statement", mode="before")
     def make_sure_statements_is_list(cls, v):
         if not isinstance(v, list):
             return [v]
@@ -96,7 +96,7 @@ class ManagedPolicy:
 
 @dataclass
 class PermissionBoundary:
-    PermissionsBoundaryType: str = Field(..., regex="^Policy$")
+    PermissionsBoundaryType: str = Field(..., pattern="^Policy$")
     PermissionsBoundaryArn: str = Field(...)
 
 
@@ -248,7 +248,7 @@ class OrganizationAccount:
     JoinedMethod: str
     JoinedTimestamp: datetime
     Policies: List[SCPPolicy]
-    Type: str = Field(..., regex="^Account$")
+    Type: str = Field(..., pattern="^Account$")
     Parent: Optional[Union[RootOrganization, OrganizationUnit]] = Field(None)
 
     @property
@@ -273,7 +273,7 @@ class OrganizationUnit:
     Name: str
     Policies: List[SCPPolicy]
     Children: List[Union[OrganizationUnit, OrganizationAccount]]
-    Type: str = Field(..., regex="^OU$")
+    Type: str = Field(..., pattern="^OU$")
     Parent: Optional[Union[RootOrganization, OrganizationUnit]] = Field(None)
 
     @property

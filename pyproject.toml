@@ -15,9 +15,9 @@ classifiers = [
 ]
 dependencies = [
     "z3-solver",
-    "pydantic>=1,<2",
+    "pydantic",
     "typer",
-    "python-dateutil>=2.8.2,<3",
+    "python-dateutil",
 ]
 
 [project.scripts]
