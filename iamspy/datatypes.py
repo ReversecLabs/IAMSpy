@@ -75,9 +75,9 @@ def _arn(data):
 
 
 def _bool(data):
-    if "true" == str(data.lower()):
+    if "true" == str(data).lower():
         return z3.BoolVal(True)
-    elif "false" == str(data.lower()):
+    elif "false" == str(data).lower():
         return z3.BoolVal(False)
     else:
         raise TypeError(f"Invalid Bool: {data}")
