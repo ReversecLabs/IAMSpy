@@ -186,8 +186,11 @@ class Model:
             )
 
         # Conditions
-        model_vars = get_vars(list(solver.assertions()))
-        model_conditions = get_conditions(model_vars)
+        if strict_conditions:
+            model_vars = get_vars(list(solver.assertions()))
+            model_conditions = get_conditions(model_vars)
+        else:
+            model_conditions = set()
         solver.add(
             *self.generate_conditions(
                 model_conditions,
