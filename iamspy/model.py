@@ -1,6 +1,8 @@
 from typing import List, Optional, Set, Union, Tuple
 import logging
 import json
+import os
+import multiprocessing as mp
 import z3
 import itertools
 from dataclasses import asdict
@@ -13,6 +15,39 @@ from iamspy.utils import get_conditions, get_vars
 
 
 logger = logging.getLogger("iamspy.model")
+
+# Module-level worker state and functions — must be at module level to be picklable
+_worker_model = None
+
+
+def _init_worker(model_json: str):
+    global _worker_model
+    _worker_model = Model()
+    _worker_model._model = DataModel(**json.loads(model_json))
+
+
+def _check_source(args):
+    source, action, resource, conditions, condition_file, strict_conditions = args
+    return source if _worker_model.can_i(
+        source=source,
+        action=action,
+        resource=resource,
+        conditions=conditions,
+        condition_file=condition_file,
+        strict_conditions=strict_conditions,
+    ) else None
+
+
+def _check_source_resource(args):
+    source, action, resource, conditions, condition_file, strict_conditions = args
+    return (source, resource) if _worker_model.can_i(
+        source=source,
+        action=action,
+        resource=resource,
+        conditions=conditions,
+        condition_file=condition_file,
+        strict_conditions=strict_conditions,
+    ) else None
 
 
 class Model:
@@ -340,21 +375,30 @@ class Model:
         conditions: List[str] = [],
         condition_file: Optional[str] = None,
         strict_conditions: bool = False,
+        workers: int = 1,
     ) -> list[str]:
         """
         Used by the CLI to provide the who-can call.
         """
         possible_accounts = self._check_viable_source_accounts(action, resource)
 
+        sources = set()
         for gaad in self._model.gaads.values():
             if gaad.account not in possible_accounts:
                 logger.debug(f"Skipping {gaad.account} GAAD as not a viable source account for {resource}")
                 continue
             logger.debug(f"Checking identities in {gaad.account} GAAD")
-            sources = set()
             for identity in gaad.RoleDetailList + gaad.UserDetailList:
                 sources.add(identity.Arn)
 
+        if workers > 1:
+            model_json = json.dumps(asdict(self._model), default=json_serial)
+            args = [(s, action, resource, conditions, condition_file, strict_conditions) for s in sources]
+            with mp.Pool(workers, initializer=_init_worker, initargs=(model_json,)) as pool:
+                for result in pool.map(_check_source, args):
+                    if result:
+                        yield result
+        else:
             for source in sources:
                 if self.can_i(
                     source=source,
@@ -398,6 +442,7 @@ class Model:
         conditions: List[str] = [],
         condition_file: Optional[str] = None,
         strict_conditions: bool = False,
+        workers: int = 1,
     ) -> List[Tuple[str, str]]:
         possible_accounts = set()
 
@@ -405,15 +450,23 @@ class Model:
             accounts = self._check_viable_source_accounts(action, resource)
             possible_accounts.update(accounts)
 
+        sources = set()
         for gaad in self._model.gaads.values():
             if gaad.account not in possible_accounts:
                 logger.debug(f"Skipping {gaad.account} GAAD as not a viable source account for {resource}")
                 continue
             logger.debug(f"Checking identities in {gaad.account} GAAD")
-            sources = set()
             for identity in gaad.RoleDetailList + gaad.UserDetailList:
                 sources.add(identity.Arn)
 
+        if workers > 1:
+            model_json = json.dumps(asdict(self._model), default=json_serial)
+            args = [(s, action, r, conditions, condition_file, strict_conditions) for s, r in itertools.product(sources, resources)]
+            with mp.Pool(workers, initializer=_init_worker, initargs=(model_json,)) as pool:
+                for result in pool.map(_check_source_resource, args):
+                    if result:
+                        yield result
+        else:
             for source, resource in itertools.product(sources, resources):
                 if self.can_i(
                     source=source,
