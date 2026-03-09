@@ -469,10 +469,10 @@ def add_account_scps(accounts: List[OrganizationAccount]):
     return model
 
 
-def add_resource(resource_policies: List[ResourcePolicy], resource: str):
+def add_resource(resource_policies: Dict[str, ResourcePolicy], resource: str):
     try:
-        res = next(x for x in resource_policies if x.Resource == resource)
-    except StopIteration:
+        res = resource_policies[resource]
+    except KeyError:
         if resource.startswith("arn:aws:s3:::") and "/" in resource:
             bucket_resource = resource.split("/")[0]
             logger.info(f"No resource policy found for {resource}, using bucket policy for {bucket_resource}")

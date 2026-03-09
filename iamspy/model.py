@@ -253,7 +253,7 @@ class Model:
         Load resource policies in from a JSON file
         """
         policies = [ResourcePolicy(**item) for item in json.load(open(filename))]
-        self._model.resource_policies.extend(policies)
+        self._model.resource_policies.update({p.Resource: p for p in policies})
         return policies
 
     def load_scps(self, filename: str) -> RootOrganization:
@@ -281,13 +281,8 @@ class Model:
 
     def _check_viable_source_accounts(self, action: str, resource: str) -> Set[str]:
         all_source_accounts = list(self._model.gaads.keys())
-        try:
-            if resource.startswith("arn:aws:s3:::") and "/" in resource:
-                bucket = resource.split("/")[0]
-                next(p for p in self._model.resource_policies if p.Resource == bucket)
-            else:
-                next(p for p in self._model.resource_policies if p.Resource == resource)
-        except StopIteration:
+        res_key = resource.split("/")[0] if resource.startswith("arn:aws:s3:::") and "/" in resource else resource
+        if res_key not in self._model.resource_policies:
             # No resource policy, assume same account only (unless it's an S3 bucket)
             if resource.startswith("arn:aws:s3:::"):
                 return set(all_source_accounts)

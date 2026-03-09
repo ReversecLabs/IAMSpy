@@ -368,8 +368,14 @@ class RootOrganization:
 @dataclass
 class DataModel:
     gaads: Dict[str, AuthorizationDetails] = Field(default_factory=dict)
-    resource_policies: List[ResourcePolicy] = Field(default_factory=list)
+    resource_policies: Dict[str, ResourcePolicy] = Field(default_factory=dict)
     orgs: List[RootOrganization] = Field(default_factory=list)
+
+    @field_validator("resource_policies", mode="before")
+    def coerce_resource_policies_to_dict(cls, v):
+        if isinstance(v, list):
+            return {rp["Resource"] if isinstance(rp, dict) else rp.Resource: rp for rp in v}
+        return v
 
     def get_aws_account(self, account_id: str) -> Optional[OrganizationAccount]:
         for org in self.orgs:
