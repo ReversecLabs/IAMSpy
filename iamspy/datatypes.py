@@ -3,6 +3,7 @@ import ipaddress
 import string
 import z3
 from dateutil.parser import parse
+from functools import lru_cache
 
 # equivalient to chars in string.ascii_letters + string.digits + string.punctuation
 ANY = z3.Range("!", "~")
@@ -33,6 +34,7 @@ def parse_string(item, string, wildcard=True, case_sensitive=False):
     return z3.InRe(item, regex)
 
 
+@lru_cache(maxsize=2048)
 def _regex_parse_string(string, case_sensitive=False):
     def intersperse(parts, char):
         output = [char] * (len(parts) * 2 - 1)
