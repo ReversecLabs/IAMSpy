@@ -38,7 +38,7 @@ class Statements:
     NotAction: Optional[Union[str, List[str]]] = None
     Resource: Optional[Union[str, List[str]]] = None
     NotResource: Optional[Union[str, List[str]]] = None
-    Condition: Optional[Dict[str, Dict[str, Union[str, List[str]]]]] = None
+    Condition: Optional[Dict[str, Dict[str, Union[bool, str, List[str]]]]] = None
 
     @field_validator("Principal", mode="before")
     def principal_is_list(cls, v):
