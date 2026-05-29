@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import List, Optional
 import typer
 from iamspy.model import Model
@@ -82,6 +83,7 @@ def who_can(
     strict_conditions: bool = typer.Option(
         False, help="Whether to require conditions to be passed in for any IAM condition checks"
     ),
+    workers: int = typer.Option(os.cpu_count(), "-w", help="Number of parallel worker processes"),
     model: str = typer.Option(DEFAULT_MODEL_FILENAME, "-f"),
 ):
     """
@@ -91,7 +93,7 @@ def who_can(
     if Path(model).is_file():
         m.load_model(model)
 
-    for x in m.who_can(action, resource, conditions, condition_file, strict_conditions):
+    for x in m.who_can(action, resource, conditions, condition_file, strict_conditions, workers):
         print(x)
 
 
@@ -134,6 +136,7 @@ def who_can_batch_resource(
     strict_conditions: bool = typer.Option(
         False, help="Whether to require conditions to be passed in for any IAM condition checks"
     ),
+    workers: int = typer.Option(os.cpu_count(), "-w", help="Number of parallel worker processes"),
     model: str = typer.Option(DEFAULT_MODEL_FILENAME, "-f"),
 ):
     """
@@ -146,7 +149,7 @@ def who_can_batch_resource(
     with open(resources_file) as fs:
         resources = fs.read().strip().split("\n")
 
-    for source, resource in m.who_can_batch_resource(action, resources, conditions, condition_file, strict_conditions):
+    for source, resource in m.who_can_batch_resource(action, resources, conditions, condition_file, strict_conditions, workers):
         print(f"{source} can perform {action} on {resource}")
 
 
