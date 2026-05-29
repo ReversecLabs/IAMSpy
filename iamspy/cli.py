@@ -1,15 +1,19 @@
 import logging
+import os
 from typing import List, Optional
 import typer
 from iamspy.model import Model
 from pathlib import Path
 from iamspy.log_config import build_logger
 
+DEFAULT_MODEL_FILENAME = "model.json"
+
+
 app = typer.Typer()
 
 
 @app.command()
-def load_gaad(gaad: str = typer.Argument(...), model: str = typer.Option("model.smt2", "-f")):
+def load_gaad(gaad: str = typer.Argument(...), model: str = typer.Option(DEFAULT_MODEL_FILENAME, "-f")):
     m = Model()
     if Path(model).is_file():
         m.load_model(model)
@@ -18,7 +22,16 @@ def load_gaad(gaad: str = typer.Argument(...), model: str = typer.Option("model.
 
 
 @app.command()
-def load_resources(resources: str = typer.Argument(...), model: str = typer.Option("model.smt2", "-f")):
+def load_gaads(folder: str = typer.Argument(...), model: str = typer.Option(DEFAULT_MODEL_FILENAME, "-f")):
+    m = Model()
+    if Path(model).is_file():
+        m.load_model(model)
+    m.load_gaads(folder)
+    m.save(model)
+
+
+@app.command()
+def load_resources(resources: str = typer.Argument(...), model: str = typer.Option(DEFAULT_MODEL_FILENAME, "-f")):
     m = Model()
     if Path(model).is_file():
         m.load_model(model)
@@ -27,7 +40,7 @@ def load_resources(resources: str = typer.Argument(...), model: str = typer.Opti
 
 
 @app.command()
-def load_scps(scps: str = typer.Argument(...), model: str = typer.Option("model.smt2", "-f")):
+def load_scps(scps: str = typer.Argument(...), model: str = typer.Option(DEFAULT_MODEL_FILENAME, "-f")):
     m = Model()
     if Path(model).is_file():
         m.load_model(model)
@@ -47,7 +60,7 @@ def can_i(
     strict_conditions: bool = typer.Option(
         False, help="Whether to require conditions to be passed in for any IAM condition checks"
     ),
-    model: str = typer.Option("model.smt2", "-f"),
+    model: str = typer.Option(DEFAULT_MODEL_FILENAME, "-f"),
 ):
     """
     Pulls out applicable policies, runs can_i
@@ -70,7 +83,8 @@ def who_can(
     strict_conditions: bool = typer.Option(
         False, help="Whether to require conditions to be passed in for any IAM condition checks"
     ),
-    model: str = typer.Option("model.smt2", "-f"),
+    workers: int = typer.Option(os.cpu_count(), "-w", help="Number of parallel worker processes"),
+    model: str = typer.Option(DEFAULT_MODEL_FILENAME, "-f"),
 ):
     """
     Pulls out applicable policies, runs who_can
@@ -79,7 +93,7 @@ def who_can(
     if Path(model).is_file():
         m.load_model(model)
 
-    for x in m.who_can(action, resource, conditions, condition_file, strict_conditions):
+    for x in m.who_can(action, resource, conditions, condition_file, strict_conditions, workers):
         print(x)
 
 
@@ -122,7 +136,8 @@ def who_can_batch_resource(
     strict_conditions: bool = typer.Option(
         False, help="Whether to require conditions to be passed in for any IAM condition checks"
     ),
-    model: str = typer.Option("model.smt2", "-f"),
+    workers: int = typer.Option(os.cpu_count(), "-w", help="Number of parallel worker processes"),
+    model: str = typer.Option(DEFAULT_MODEL_FILENAME, "-f"),
 ):
     """
     Pulls out applicable policies, runs who_can
@@ -134,8 +149,22 @@ def who_can_batch_resource(
     with open(resources_file) as fs:
         resources = fs.read().strip().split("\n")
 
-    for source, resource in m.who_can_batch_resource(action, resources, conditions, condition_file, strict_conditions):
+    for source, resource in m.who_can_batch_resource(action, resources, conditions, condition_file, strict_conditions, workers):
         print(f"{source} can perform {action} on {resource}")
+
+
+@app.command()
+def supports_external(
+    model: str = typer.Option(DEFAULT_MODEL_FILENAME, "-f"),
+):
+    """
+    Pulls out resources that allow access from identities not within the model
+    """
+    m = Model()
+    if Path(model).is_file():
+        m.load_model(model)
+
+    print(m.supports_external(action, resource))
 
 
 @app.callback()

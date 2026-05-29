@@ -2,11 +2,25 @@
 Classes representing IAM documents
 """
 from __future__ import annotations
-from pydantic import Field, validator
+from dataclasses import asdict
+from pydantic import Field, field_validator, model_validator
 from pydantic.dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List, Dict, Union, Any
 from enum import Enum
+import logging
+
+
+logger = logging.getLogger("iamspy.iam")
+
+
+def json_serial(obj):
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    elif isinstance(obj, Effects):
+        return obj.value
+    else:
+        raise TypeError("Unserializable object {} of type {}".format(obj, type(obj)))
 
 
 class Effects(Enum):
@@ -24,9 +38,9 @@ class Statements:
     NotAction: Optional[Union[str, List[str]]] = None
     Resource: Optional[Union[str, List[str]]] = None
     NotResource: Optional[Union[str, List[str]]] = None
-    Condition: Optional[Dict[str, Dict[str, Union[str, List[str]]]]] = None
+    Condition: Optional[Dict[str, Dict[str, Union[bool, str, List[str]]]]] = None
 
-    @validator("Principal", pre=True)
+    @field_validator("Principal", mode="before")
     def principal_is_list(cls, v):
         if not v:
             return v
@@ -37,7 +51,7 @@ class Statements:
                 v[key] = [value]
         return v
 
-    @validator("NotPrincipal", pre=True)
+    @field_validator("NotPrincipal", mode="before")
     def notprincipal_is_list(cls, v):
         if not v:
             return v
@@ -48,11 +62,11 @@ class Statements:
                 v[key] = [value]
         return v
 
-    @validator("NotAction", always=True)
-    def at_least_action_or_not_action(cls, v, values, **kwargs):
-        if not ((values.get("Action", None) is not None) ^ (v is not None)):
+    @model_validator(mode="after")
+    def at_least_action_or_not_action(self) -> Self:
+        if not self.Action and not self.NotAction:
             raise ValueError("At least one of Action and NotAction must be specified")
-        return v
+        return self
 
 
 @dataclass
@@ -61,7 +75,7 @@ class Document:
     Id: Optional[str] = None
     Statement: List[Statements] = Field(default_factory=list)
 
-    @validator("Statement", pre=True)
+    @field_validator("Statement", mode="before")
     def make_sure_statements_is_list(cls, v):
         if not isinstance(v, list):
             return [v]
@@ -82,7 +96,7 @@ class ManagedPolicy:
 
 @dataclass
 class PermissionBoundary:
-    PermissionsBoundaryType: str = Field(..., regex="^Policy$")
+    PermissionsBoundaryType: str = Field(..., pattern="^Policy$")
     PermissionsBoundaryArn: str = Field(...)
 
 
@@ -188,6 +202,17 @@ class AuthorizationDetails:
     RoleDetailList: List[RoleDetail]
     Policies: List[PolicyDetail]
 
+    @property
+    def account(self) -> str:
+        for entity in self.UserDetailList + self.GroupDetailList + self.RoleDetailList + self.Policies:
+            if entity.Arn and (account := entity.Arn.split(":")[4]):
+                return account
+
+    def get_entity(self, arn: str) -> Union[UserDetail, GroupDetail, RoleDetail, PolicyDetail]:
+        for entity in self.UserDetailList + self.GroupDetailList + self.RoleDetailList + self.Policies:
+            if entity.Arn == arn:
+                return entity
+
 
 @dataclass
 class ResourcePolicy:
@@ -206,6 +231,12 @@ class SCPPolicy:
     AwsManaged: bool
     Content: Document
 
+    def __eq__(self, other):
+        return self.Arn == other.Arn
+
+    def __hash__(self):
+        return hash(self.Arn)
+
 
 @dataclass
 class OrganizationAccount:
@@ -217,7 +248,8 @@ class OrganizationAccount:
     JoinedMethod: str
     JoinedTimestamp: datetime
     Policies: List[SCPPolicy]
-    Type: str = Field(..., regex="^Account$")
+    Type: str = Field(..., pattern="^Account$")
+    Parent: Optional[Union[RootOrganization, OrganizationUnit]] = Field(None)
 
     @property
     def all_policies(self) -> List[SCPPolicy]:
@@ -227,6 +259,12 @@ class OrganizationAccount:
     def all_children(self) -> List[OrganizationAccount]:
         return [self]
 
+    def __eq__(self, other):
+        return self.Arn == other.Arn
+
+    def __hash__(self):
+        return hash(self.Arn)
+
 
 @dataclass
 class OrganizationUnit:
@@ -235,7 +273,8 @@ class OrganizationUnit:
     Name: str
     Policies: List[SCPPolicy]
     Children: List[Union[OrganizationUnit, OrganizationAccount]]
-    Type: str = Field(..., regex="^OU$")
+    Type: str = Field(..., pattern="^OU$")
+    Parent: Optional[Union[RootOrganization, OrganizationUnit]] = Field(None)
 
     @property
     def all_policies(self) -> List[SCPPolicy]:
@@ -255,6 +294,26 @@ class OrganizationUnit:
 
         return children
 
+    def set_parents(self):
+        for child in self.Children:
+            child.Parent = self
+            if isinstance(child, OrganizationUnit):
+                child.set_parents()
+
+    def find_account(self, account_id: str) -> Optional[OrganizationAccount]:
+        for child in self.Children:
+            if isinstance(child, OrganizationAccount) and child.Id == account_id:
+                return child
+            elif isinstance(child, OrganizationUnit):
+                if result := child.find_account(account_id):
+                    return result
+
+    def __eq__(self, other):
+        return self.Arn == other.Arn
+
+    def __hash__(self):
+        return hash(self.Arn)
+
 
 @dataclass
 class RootOrganization:
@@ -265,6 +324,7 @@ class RootOrganization:
     Policies: List[SCPPolicy]
     Children: List[Union[OrganizationUnit, OrganizationAccount]]
     Type: str = "Root"
+    Parent: None = None
 
     @property
     def all_policies(self) -> List[SCPPolicy]:
@@ -284,58 +344,40 @@ class RootOrganization:
 
         return children
 
+    def set_parents(self):
+        for child in self.Children:
+            child.Parent = self
+            if isinstance(child, OrganizationUnit):
+                child.set_parents()
 
-def extract_applicable_policies(data: AuthorizationDetails, source_arn: str) -> List[Document]:
-    """
-    For any given ARN, go through the GAAD, find all policies that apply to an ARN
-    """
-    source_type = source_arn.split(":")[5].split("/")[0]
+    def find_account(self, account_id: str) -> Optional[OrganizationAccount]:
+        for child in self.Children:
+            if isinstance(child, OrganizationAccount) and child.Id == account_id:
+                return child
+            elif isinstance(child, OrganizationUnit):
+                if result := child.find_account(account_id):
+                    return result
 
-    source: Union[RoleDetail, UserDetail]
+    def __eq__(self, other):
+        return self.Arn == other.Arn
 
-    if source_type == "user":
-        try:
-            source = next(x for x in data.UserDetailList if x.Arn == source_arn)
-            inline_policies = source.UserPolicyList
-        except StopIteration:
-            raise ValueError("Can't find Source ARN")
-    elif source_type == "role":
-        try:
-            source = next(x for x in data.RoleDetailList if x.Arn == source_arn)
-            inline_policies = source.RolePolicyList
-        except StopIteration:
-            raise ValueError("Can't find Source ARN")
-    applicable_policies = []
+    def __hash__(self):
+        return hash(self.Arn)
 
-    for managed_policy in source.AttachedManagedPolicies:
-        policy_arn = managed_policy.PolicyArn
-        try:
-            policy_details = next(x for x in data.Policies if policy_arn == x.Arn)
-            policy_version = next(x for x in policy_details.PolicyVersionList if x.IsDefaultVersion)
-        except StopIteration:
-            continue
-        applicable_policies.append(policy_version.Document)
 
-    for inline_policy in inline_policies:
-        applicable_policies.append(inline_policy.PolicyDocument)
+@dataclass
+class DataModel:
+    gaads: Dict[str, AuthorizationDetails] = Field(default_factory=dict)
+    resource_policies: Dict[str, ResourcePolicy] = Field(default_factory=dict)
+    orgs: List[RootOrganization] = Field(default_factory=list)
 
-    if isinstance(source, UserDetail):
-        for name in source.GroupList:
-            try:
-                group = next(x for x in data.GroupDetailList if x.GroupName == name)
-            except StopIteration:
-                continue
+    @field_validator("resource_policies", mode="before")
+    def coerce_resource_policies_to_dict(cls, v):
+        if isinstance(v, list):
+            return {rp["Resource"] if isinstance(rp, dict) else rp.Resource: rp for rp in v}
+        return v
 
-            for managed_policy in group.AttachedManagedPolicies:
-                policy_arn = managed_policy.PolicyArn
-                try:
-                    policy_details = next(x for x in data.Policies if policy_arn == x.Arn)
-                    policy_version = next(x for x in policy_details.PolicyVersionList if x.IsDefaultVersion)
-                except StopIteration:
-                    continue
-                applicable_policies.append(policy_version.Document)
-
-            for policy in group.GroupPolicyList:
-                applicable_policies.append(policy.PolicyDocument)
-
-    return applicable_policies
+    def get_aws_account(self, account_id: str) -> Optional[OrganizationAccount]:
+        for org in self.orgs:
+            if account := org.find_account(account_id):
+                return account
