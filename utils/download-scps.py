@@ -50,7 +50,12 @@ def get_account(account_id):
         for account in handle_next_token(client.list_accounts, "Accounts"):
             all_accounts[account["Id"]] = account
 
-    return all_accounts[account_id]
+    return all_accounts.get(account_id, {
+        "Id": account_id,
+        "Name": f"Deactivated-Account-{account_id}",
+        "Status": "SUSPENDED_OR_DEACTIVATED"
+    })
+
 
 
 def get_policies(target_id):
@@ -97,8 +102,17 @@ def get_children(parent):
         ous = [{**x, "Type": "OU"} for x in ous]
 
     if accounts:
-        accounts = [get_account(x["Id"]) for x in accounts]
-        accounts = [{**x, "Policies": get_policies(x["Id"]), "Type": "Account"} for x in accounts]
+        resolved_accounts = []
+        for x in accounts:
+            account_data = get_account(x["Id"])
+            try:
+                policies = get_policies(x["Id"])
+            except Exception as e:
+                print_stderr(f"Warning: Could not fetch policies for account {x['Id']}: {e}")
+                policies = [] # fallback to empty list
+
+            resolved_accounts.append({**account_data, "Policies": policies, "Type": "Account"})
+        accounts = resolved_accounts
 
     resp["Children"] = ous + accounts
 
