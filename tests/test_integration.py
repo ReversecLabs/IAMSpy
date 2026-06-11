@@ -220,6 +220,53 @@ import pytest
             ),
             True,
         ),
+        # sts:AssumeRole — target role's trust policy (AssumeRolePolicyDocument)
+        # must be honoured as the resource policy even though it is not loaded
+        # via load_resource_policies. Same-account assume is allowed iff the
+        # caller has identity permission AND the target trust allows the caller.
+        # Explicit-principal trust naming the caller role exactly.
+        (
+            {"gaads": ["assume-role-trust.json"]},
+            (
+                "arn:aws:iam::111111111111:role/Caller",
+                "sts:AssumeRole",
+                "arn:aws:iam::111111111111:role/TrustingRole",
+            ),
+            True,
+        ),
+        # Account-root (":root") trust delegates to identity policies in the
+        # account; the caller has sts:AssumeRole identity permission, so allowed.
+        (
+            {"gaads": ["assume-role-trust.json"]},
+            (
+                "arn:aws:iam::111111111111:role/Caller",
+                "sts:AssumeRole",
+                "arn:aws:iam::111111111111:role/RootTrust",
+            ),
+            True,
+        ),
+        # Target trust does not name the caller and is not a :root delegation,
+        # so the assume must be denied even though identity allows it.
+        (
+            {"gaads": ["assume-role-trust.json"]},
+            (
+                "arn:aws:iam::111111111111:role/Caller",
+                "sts:AssumeRole",
+                "arn:aws:iam::111111111111:role/NoTrust",
+            ),
+            False,
+        ),
+        # :root trust delegates to identity policies, so a caller WITHOUT the
+        # sts:AssumeRole identity permission is still denied.
+        (
+            {"gaads": ["assume-role-trust.json"]},
+            (
+                "arn:aws:iam::111111111111:role/NoIdentityCaller",
+                "sts:AssumeRole",
+                "arn:aws:iam::111111111111:role/RootTrust",
+            ),
+            False,
+        ),
     ],
 )
 def test_can_i(files, inp, out):
@@ -384,6 +431,16 @@ def test_can_i(files, inp, out):
                 "arn:aws:s3:::bucket/key",
             ),
             set(["arn:aws:iam::111111111111:user/userA", "arn:aws:iam::111111111111:user/userB"]),
+        ),
+        # who-can sts:AssumeRole resolves the target role's trust policy from the
+        # GAAD: only the caller with both identity permission and trust matches.
+        (
+            {"gaads": ["assume-role-trust.json"]},
+            (
+                "sts:AssumeRole",
+                "arn:aws:iam::111111111111:role/RootTrust",
+            ),
+            set(["arn:aws:iam::111111111111:role/Caller"]),
         ),
     ],
 )

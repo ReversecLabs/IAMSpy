@@ -192,7 +192,15 @@ class Model:
             resource = list(additional_buckets) + resource
 
             for res in resource:
-                solver.add(*add_resource(self._model.resource_policies, res))
+                # A role's trust policy (AssumeRolePolicyDocument) is the
+                # resource policy for sts:AssumeRole, but it lives in the GAAD
+                # rather than in the explicitly loaded resource policies. If the
+                # resource is a role with no explicit resource policy, fall back
+                # to its trust policy so the assume can be evaluated.
+                if res not in self._model.resource_policies and (trust := self._get_role_trust_policy(res)):
+                    solver.add(*trust)
+                else:
+                    solver.add(*add_resource(self._model.resource_policies, res))
             logger.debug(f"Adding constraint resource is {resource}")
             solver.add(
                 z3.Or(
@@ -299,6 +307,32 @@ class Model:
 
         return org
 
+    def _get_role_trust_policy(self, resource: str):
+        """
+        Build the resource-policy constraints for an IAM role's trust policy
+        (AssumeRolePolicyDocument) from a loaded GAAD, or None if the resource
+        is not a role present in a GAAD.
+
+        A role's trust policy is the resource policy that governs
+        sts:AssumeRole, but it is stored in the GAAD rather than in the
+        explicitly loaded resource policies, so it is resolved here on demand.
+        """
+        try:
+            account_id = resource.split(":")[4]
+        except IndexError:
+            return None
+
+        gaad = self._model.gaads.get(account_id)
+        if not gaad:
+            return None
+
+        role = next((x for x in gaad.RoleDetailList if x.Arn == resource), None)
+        if not role:
+            return None
+
+        logger.debug(f"Using trust policy of {resource} as its resource policy")
+        return parse.parse_resource_policy(role.Arn, role.AssumeRolePolicyDocument)
+
     def get_correct_case_principal(self, principal: str) -> str:
         account_id = principal.split(":")[4]
         entity_type = principal.split(":")[5].split("/")[0]
@@ -317,7 +351,11 @@ class Model:
     def _check_viable_source_accounts(self, action: str, resource: str) -> Set[str]:
         all_source_accounts = list(self._model.gaads.keys())
         res_key = resource.split("/")[0] if resource.startswith("arn:aws:s3:::") and "/" in resource else resource
-        if res_key not in self._model.resource_policies:
+        # A role's trust policy acts as its resource policy (for sts:AssumeRole)
+        # even though it is not in resource_policies, so it can permit
+        # cross-account sources and must be evaluated per account below.
+        has_trust_policy = res_key not in self._model.resource_policies and self._get_role_trust_policy(res_key) is not None
+        if res_key not in self._model.resource_policies and not has_trust_policy:
             # No resource policy, assume same account only (unless it's an S3 bucket)
             if resource.startswith("arn:aws:s3:::"):
                 return set(all_source_accounts)

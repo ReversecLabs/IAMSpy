@@ -1,0 +1,141 @@
+{
+  "UserDetailList": [],
+  "GroupDetailList": [],
+  "Policies": [],
+  "RoleDetailList": [
+    {
+      "Path": "/",
+      "RoleName": "Caller",
+      "RoleId": "AROACALLER",
+      "Arn": "arn:aws:iam::111111111111:role/Caller",
+      "CreateDate": "2024-01-01T00:00:00+00:00",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "ec2.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "InstanceProfileList": [],
+      "RolePolicyList": [
+        {
+          "PolicyName": "p",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": "sts:AssumeRole",
+                "Resource": "*"
+              }
+            ]
+          }
+        }
+      ],
+      "AttachedManagedPolicies": [],
+      "Tags": [],
+      "RoleLastUsed": {}
+    },
+    {
+      "Path": "/",
+      "RoleName": "NoIdentityCaller",
+      "RoleId": "AROANOIDENTITY",
+      "Arn": "arn:aws:iam::111111111111:role/NoIdentityCaller",
+      "CreateDate": "2024-01-01T00:00:00+00:00",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "ec2.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "InstanceProfileList": [],
+      "RolePolicyList": [],
+      "AttachedManagedPolicies": [],
+      "Tags": [],
+      "RoleLastUsed": {}
+    },
+    {
+      "Path": "/",
+      "RoleName": "TrustingRole",
+      "RoleId": "AROATRUST",
+      "Arn": "arn:aws:iam::111111111111:role/TrustingRole",
+      "CreateDate": "2024-01-01T00:00:00+00:00",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "AWS": "arn:aws:iam::111111111111:role/Caller"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "InstanceProfileList": [],
+      "RolePolicyList": [],
+      "AttachedManagedPolicies": [],
+      "Tags": [],
+      "RoleLastUsed": {}
+    },
+    {
+      "Path": "/",
+      "RoleName": "RootTrust",
+      "RoleId": "AROAROOT",
+      "Arn": "arn:aws:iam::111111111111:role/RootTrust",
+      "CreateDate": "2024-01-01T00:00:00+00:00",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "AWS": "arn:aws:iam::111111111111:root"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "InstanceProfileList": [],
+      "RolePolicyList": [],
+      "AttachedManagedPolicies": [],
+      "Tags": [],
+      "RoleLastUsed": {}
+    },
+    {
+      "Path": "/",
+      "RoleName": "NoTrust",
+      "RoleId": "AROANOTRUST",
+      "Arn": "arn:aws:iam::111111111111:role/NoTrust",
+      "CreateDate": "2024-01-01T00:00:00+00:00",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "ec2.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "InstanceProfileList": [],
+      "RolePolicyList": [],
+      "AttachedManagedPolicies": [],
+      "Tags": [],
+      "RoleLastUsed": {}
+    }
+  ]
+}
